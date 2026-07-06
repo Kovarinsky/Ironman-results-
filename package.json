@@ -1,0 +1,17 @@
+{
+  "name": "ironman-czech-results",
+  "version": "1.0.0",
+  "description": "Scraper výsledků závodů Ironman pro české závodníky",
+  "type": "module",
+  "scripts": {
+    "scrape": "node scraper.mjs",
+    "scrape:letos": "node scraper.mjs --year 2026",
+    "scrape:czech": "node scraper.mjs --from 2015 --to 2026",
+    "scrape:test": "node scraper.mjs --dry-run",
+    "scrape:full": "node scraper.mjs --full-only",
+    "scrape:703": "node scraper.mjs --703-only"
+  },
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}

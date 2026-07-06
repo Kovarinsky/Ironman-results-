@@ -1,0 +1,65 @@
+name: Ironman – čeští závodníci
+
+on:
+  workflow_dispatch:
+    inputs:
+      od_roku:
+        description: "Od roku"
+        required: false
+        default: "2020"
+        type: string
+      do_roku:
+        description: "Do roku"
+        required: false
+        default: "2026"
+        type: string
+      typ_zavodu:
+        description: "Typ závodu"
+        required: false
+        default: "oba"
+        type: choice
+        options:
+          - oba
+          - full-only
+          - 703-only
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Instalace závislostí
+        run: npm ci
+
+      - name: Instalace Playwright prohlížeče
+        run: npx playwright install --with-deps chromium
+
+      - name: Sestavení argumentů
+        id: args
+        run: |
+          ARGS="--from ${{ inputs.od_roku }} --to ${{ inputs.do_roku }}"
+          if [ "${{ inputs.typ_zavodu }}" = "full-only" ]; then
+            ARGS="$ARGS --full-only"
+          elif [ "${{ inputs.typ_zavodu }}" = "703-only" ]; then
+            ARGS="$ARGS --703-only"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+      - name: Spuštění scraperu
+        run: node scraper.mjs ${{ steps.args.outputs.args }}
+
+      - name: Upload výsledků
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironman-ceske-vysledky-${{ inputs.od_roku }}-${{ inputs.do_roku }}
+          path: data/
+          retention-days: 90
+          if-no-files-found: warn
