@@ -108,19 +108,19 @@ async function httpGet(url, { asJson = false, timeout = 25000, referer, allowNot
 const KNOWN_RACES = [
   { id: 'im-frankfurt',    name: 'Ironman Frankfurt',               type: 'FULL', slug: 'im-frankfurt' },
   { id: 'im703-hradec',    name: 'Ironman 70.3 Hradec Králové',     type: '703',  slug: 'im703-hradec-kralove' },
-  { id: 'im703-stpoelten', name: 'Ironman 70.3 St. Pölten',         type: '703',  slug: 'im703-st-poelten',         altSlugs: ['im703-st-polten', 'im703-linz'] },
+  { id: 'im703-stpoelten', name: 'Ironman 70.3 St. Pölten',         type: '703',  slug: 'im703-st-poelten',        altSlugs: ['im703-st-polten'] },
   { id: 'im-lanzarote',    name: 'Ironman Lanzarote',               type: 'FULL', slug: 'im-lanzarote' },
   { id: 'im-austria',      name: 'Ironman Austria (Klagenfurt)',    type: 'FULL', slug: 'im-austria' },
-  { id: 'im703-austria',   name: 'Ironman 70.3 Austria',            type: '703',  slug: 'im703-austria',            altSlugs: ['im703-kapfenberg', 'im703-marchtrenk', 'im703-austria-zell-am-see'] },
+  { id: 'im703-austria',   name: 'Ironman 70.3 Austria',            type: '703',  slug: 'im703-austria' },
   { id: 'im-barcelona',    name: 'Ironman Barcelona',               type: 'FULL', slug: 'im-barcelona' },
   { id: 'im-copenhagen',   name: 'Ironman Copenhagen',              type: 'FULL', slug: 'im-copenhagen' },
   { id: 'im-hamburg',      name: 'Ironman Hamburg',                 type: 'FULL', slug: 'im-hamburg' },
-  { id: 'im703-hamburg',   name: 'Ironman 70.3 Hamburg',            type: '703',  slug: 'im703-hamburg',            altSlugs: ['im703-hamburg-city'] },
+  { id: 'im703-hamburg',   name: 'Ironman 70.3 Hamburg',            type: '703',  slug: 'im703-hamburg' },
   { id: 'im703-duisburg',  name: 'Ironman 70.3 Duisburg',           type: '703',  slug: 'im703-duisburg' },
   { id: 'im703-gdynia',    name: 'Ironman 70.3 Gdynia',             type: '703',  slug: 'im703-gdynia' },
-  { id: 'im-hawaii',       name: 'Ironman World Championship',      type: 'FULL', slug: 'im-world-championship',   altSlugs: ['im-world-championship-kona'] },
+  { id: 'im-hawaii',       name: 'Ironman World Championship',      type: 'FULL', slug: 'im-world-championship',  altSlugs: ['im-world-championship-kona'] },
   { id: 'im-nice',         name: 'Ironman WC Nice',                 type: 'FULL', slug: 'im-world-championship-nice' },
-  { id: 'im703-worlds',    name: 'Ironman 70.3 World Championship', type: '703',  slug: 'im703-world-championship', altSlugs: ['im703-world-championship-taupo', 'im703-world-championship-lahti'] },
+  { id: 'im703-worlds',    name: 'Ironman 70.3 World Championship', type: '703',  slug: 'im703-world-championship' },
   { id: 'im703-zell',      name: 'Ironman 70.3 Zell am See',        type: '703',  slug: 'im703-zell-am-see' },
   { id: 'im703-elsinore',  name: 'Ironman 70.3 Elsinore',           type: '703',  slug: 'im703-elsinore' },
 ]
@@ -130,7 +130,7 @@ const KNOWN_RACES = [
 const UUID_RE = /labs-v2\.competitor\.com\/results\/event\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
 
 async function extractUuidFromPage(url) {
-  const html = await httpGet(url, { timeout: 20000, allowNotFound: true })
+  const html = await httpGet(url, { timeout: 7000, allowNotFound: true })
   if (!html) return null
   const m = html.match(UUID_RE)
   return m ? m[1] : null
