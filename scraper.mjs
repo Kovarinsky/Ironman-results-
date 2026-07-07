@@ -108,19 +108,19 @@ async function httpGet(url, { asJson = false, timeout = 25000, referer, allowNot
 const KNOWN_RACES = [
   { id: 'im-frankfurt',    name: 'Ironman Frankfurt',               type: 'FULL', slug: 'im-frankfurt' },
   { id: 'im703-hradec',    name: 'Ironman 70.3 Hradec Králové',     type: '703',  slug: 'im703-hradec-kralove' },
-  { id: 'im703-stpoelten', name: 'Ironman 70.3 St. Pölten',         type: '703',  slug: 'im703-st-poelten' },
+  { id: 'im703-stpoelten', name: 'Ironman 70.3 St. Pölten',         type: '703',  slug: 'im703-st-poelten',         altSlugs: ['im703-st-polten', 'im703-linz'] },
   { id: 'im-lanzarote',    name: 'Ironman Lanzarote',               type: 'FULL', slug: 'im-lanzarote' },
   { id: 'im-austria',      name: 'Ironman Austria (Klagenfurt)',    type: 'FULL', slug: 'im-austria' },
-  { id: 'im703-austria',   name: 'Ironman 70.3 Austria',            type: '703',  slug: 'im703-austria' },
+  { id: 'im703-austria',   name: 'Ironman 70.3 Austria',            type: '703',  slug: 'im703-austria',            altSlugs: ['im703-kapfenberg', 'im703-marchtrenk', 'im703-austria-zell-am-see'] },
   { id: 'im-barcelona',    name: 'Ironman Barcelona',               type: 'FULL', slug: 'im-barcelona' },
   { id: 'im-copenhagen',   name: 'Ironman Copenhagen',              type: 'FULL', slug: 'im-copenhagen' },
   { id: 'im-hamburg',      name: 'Ironman Hamburg',                 type: 'FULL', slug: 'im-hamburg' },
-  { id: 'im703-hamburg',   name: 'Ironman 70.3 Hamburg',            type: '703',  slug: 'im703-hamburg' },
+  { id: 'im703-hamburg',   name: 'Ironman 70.3 Hamburg',            type: '703',  slug: 'im703-hamburg',            altSlugs: ['im703-hamburg-city'] },
   { id: 'im703-duisburg',  name: 'Ironman 70.3 Duisburg',           type: '703',  slug: 'im703-duisburg' },
   { id: 'im703-gdynia',    name: 'Ironman 70.3 Gdynia',             type: '703',  slug: 'im703-gdynia' },
-  { id: 'im-hawaii',       name: 'Ironman World Championship',      type: 'FULL', slug: 'im-world-championship' },
+  { id: 'im-hawaii',       name: 'Ironman World Championship',      type: 'FULL', slug: 'im-world-championship',   altSlugs: ['im-world-championship-kona'] },
   { id: 'im-nice',         name: 'Ironman WC Nice',                 type: 'FULL', slug: 'im-world-championship-nice' },
-  { id: 'im703-worlds',    name: 'Ironman 70.3 World Championship', type: '703',  slug: 'im703-world-championship' },
+  { id: 'im703-worlds',    name: 'Ironman 70.3 World Championship', type: '703',  slug: 'im703-world-championship', altSlugs: ['im703-world-championship-taupo', 'im703-world-championship-lahti'] },
   { id: 'im703-zell',      name: 'Ironman 70.3 Zell am See',        type: '703',  slug: 'im703-zell-am-see' },
   { id: 'im703-elsinore',  name: 'Ironman 70.3 Elsinore',           type: '703',  slug: 'im703-elsinore' },
 ]
@@ -290,8 +290,15 @@ function normalizeResult(raw, race, year) {
 async function fetchCzechAthletesForRace(race, fromYear, toYear) {
   log(`\n── ${race.name} (${race.type}) ──`)
 
-  // Step 1: series UUID from /races/{slug}/results
-  const seriesUuid = await fetchSeriesUuid(race.slug)
+  // Step 1: try primary slug then altSlugs until a series UUID is found
+  const slugsToTry = [race.slug, ...(race.altSlugs ?? [])]
+  let seriesUuid = null
+  let resolvedSlug = race.slug
+  for (const slug of slugsToTry) {
+    seriesUuid = await fetchSeriesUuid(slug)
+    if (seriesUuid) { resolvedSlug = slug; break }
+    if (slug !== slugsToTry[slugsToTry.length - 1]) await sleep(500)
+  }
   if (!seriesUuid) return []
 
   // Step 2: try labs-v2 subevents via UUID-based page
@@ -307,7 +314,8 @@ async function fetchCzechAthletesForRace(race, fromYear, toYear) {
   log(`  ℹ labs-v2 subevents prázdné (client-side rendered) – záloha přes year-specific URL`)
 
   // Step 3: fallback – try year-specific ironman.com pages and series UUID directly
-  return await processYearByYear(race, seriesUuid, fromYear, toYear)
+  const resolvedRace = resolvedSlug !== race.slug ? { ...race, slug: resolvedSlug } : race
+  return await processYearByYear(resolvedRace, seriesUuid, fromYear, toYear)
 }
 
 async function processSubevents(subevents, race, fromYear, toYear) {
@@ -322,9 +330,17 @@ async function processSubevents(subevents, race, fromYear, toYear) {
     log(`  → API: ${subYear ?? '?'} UUID=${subId}`)
     try {
       const all = await fetchResultsByEventId(subId)
+      let yr = subYear
+      if (yr == null) {
+        yr = extractYearFromResults(all)
+        if (yr == null || yr < fromYear || yr > toYear) {
+          log(`  ↷ rok ${yr ?? '?'} mimo rozsah, přeskakuji`)
+          await sleep(400)
+          continue
+        }
+      }
       const czech = filterCzech(all)
-      log(`  ✓ ${czech.length} CZE / ${all.length} závodníků (${subYear ?? '?'})`)
-      const yr = subYear ?? toYear
+      log(`  ✓ ${czech.length} CZE / ${all.length} závodníků (${yr})`)
       results.push(...czech.map(r => normalizeResult(r, race, yr)))
     } catch (err) {
       log(`  ! API(${subId}): ${err.message}`)
