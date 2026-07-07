@@ -193,8 +193,9 @@ async function fetchResultsByEventId(wtcEventId) {
 
   if (!_fieldsLogged && list.length > 0) {
     _fieldsLogged = true
-    log(`  [discovery] Pole výsledku: ${Object.keys(list[0]).slice(0, 20).join(', ')}`)
-    log(`  [discovery] Ukázka: ${JSON.stringify(list[0]).substring(0, 200)}`)
+    const keys = Object.keys(list[0])
+    log(`  [discovery] Pole (${keys.length}): ${keys.join(', ')}`)
+    log(`  [discovery] Ukázka: ${JSON.stringify(list[0]).substring(0, 500)}`)
   }
 
   return list
@@ -219,7 +220,7 @@ function extractResultsList(data) {
 function filterCzech(list) {
   return list.filter(r => {
     if (!r || typeof r !== 'object') return false
-    const candidates = [
+    const directFields = [
       r.countryIso3, r.CountryIso3, r.countryiso3,
       r.countryIso, r.CountryIso, r.countryiso,
       r.country, r.Country,
@@ -228,7 +229,13 @@ function filterCzech(list) {
       r.wtc_countryiso3, r.wtc_nationality, r.wtc_country,
       r.BIBCountry, r.CountryISO,
     ]
-    return candidates.some(v => v === 'CZE' || v === 'CZ')
+    if (directFields.some(v => v === 'CZE' || v === 'CZ')) return true
+
+    // Dynamics 365 OData lookup — formatted country display name
+    const fmt = r['_wtc_countryrepresentingid_value_formatted']
+    if (fmt && /czech/i.test(fmt)) return true
+
+    return false
   })
 }
 
@@ -265,15 +272,15 @@ function normalizeResult(raw, race, year) {
     country:      'CZE',
     gender:       getField(raw, 'gender', 'sex', 'wtc_gender', 'wtc_sex'),
     ageGroup:     getField(raw, 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname'),
-    overallRank:  getField(raw, 'overallRank', 'rank', 'position', 'wtc_overallrank', 'overall_rank'),
-    divisionRank: getField(raw, 'divisionRank', 'ageGroupRank', 'categoryRank', 'wtc_divisionrank'),
-    swimTime:     getField(raw, 'swimTime', 'swim', 'wtc_swimtime', 'swim_time'),
-    t1Time:       getField(raw, 't1Time', 't1', 'wtc_t1time', 't1_time'),
-    bikeTime:     getField(raw, 'bikeTime', 'bike', 'cycleTime', 'wtc_biketime', 'bike_time'),
-    t2Time:       getField(raw, 't2Time', 't2', 'wtc_t2time', 't2_time'),
-    runTime:      getField(raw, 'runTime', 'run', 'wtc_runtime', 'run_time'),
-    finishTime:   getField(raw, 'finishTime', 'totalTime', 'wtc_finishtime', 'wtc_overalltime', 'total_time'),
-    status:       getField(raw, 'status', 'finishStatus', 'finishType', 'wtc_resulttype') || 'Finisher',
+    overallRank:  getField(raw, 'wtc_finishrank', 'wtc_finishrankoverall', 'overallRank', 'rank', 'position', 'wtc_overallrank'),
+    divisionRank: getField(raw, 'wtc_finishrankgroup', 'wtc_bikerankgroup', 'divisionRank', 'ageGroupRank', 'wtc_divisionrank'),
+    swimTime:     getField(raw, 'wtc_swimtimeformatted', 'swimTime', 'swim', 'wtc_swimtime', 'swim_time'),
+    t1Time:       getField(raw, 'wtc_transition1timeformatted', 't1Time', 't1', 'wtc_t1time', 't1_time'),
+    bikeTime:     getField(raw, 'wtc_biketimeformatted', 'bikeTime', 'bike', 'cycleTime', 'wtc_biketime', 'bike_time'),
+    t2Time:       getField(raw, 'wtc_transitiontime2formatted', 't2Time', 't2', 'wtc_t2time', 't2_time'),
+    runTime:      getField(raw, 'wtc_runtimeformatted', 'runTime', 'run', 'wtc_runtime', 'run_time'),
+    finishTime:   getField(raw, 'wtc_finishtimeformatted', 'wtc_finishtime_formatted', 'finishTime', 'totalTime', 'wtc_finishtime', 'wtc_overalltime'),
+    status:       getField(raw, 'wtc_finisher_formatted', 'status', 'finishStatus', 'finishType', 'wtc_resulttype') || 'Finisher',
     points:       getField(raw, 'points', 'qualPoints', 'wtc_points'),
   }
 }
@@ -293,6 +300,7 @@ async function fetchCzechAthletesForRace(race, fromYear, toYear) {
 
   if (subevents.length > 0) {
     log(`  ✓ labs-v2 vrátil ${subevents.length} ročníků`)
+    log(`  [sub0] ${JSON.stringify(subevents[0]).substring(0, 300)}`)
     return await processSubevents(subevents, race, fromYear, toYear)
   }
 
