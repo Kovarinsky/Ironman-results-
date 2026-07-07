@@ -129,18 +129,30 @@ const KNOWN_RACES = [
 
 const UUID_RE = /labs-v2\.competitor\.com\/results\/event\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
 
-async function extractUuidFromPage(url) {
+async function extractUuidFromPage(url, { debug = false } = {}) {
   const html = await httpGet(url, { timeout: 7000, allowNotFound: true })
   if (!html) return null
   const m = html.match(UUID_RE)
+  if (!m && debug) {
+    // Log snippet to diagnose pages that load but have no labs-v2 UUID
+    const snippet = html.replace(/\s+/g, ' ').slice(0, 400)
+    log(`  [debug] html snippet: ${snippet}`)
+  }
   return m ? m[1] : null
 }
+
+// Slugs that load successfully but have no labs-v2 UUID — enable debug snippet on failure
+const DEBUG_SLUGS = new Set([
+  'im703-world-championship-mooloolaba',
+  'im703-world-championship-taupo',
+  'im703-st-polten',
+])
 
 // Fetch the series UUID from the base results page
 async function fetchSeriesUuid(slug) {
   const url = `https://www.ironman.com/races/${slug}/results`
   try {
-    const uuid = await extractUuidFromPage(url)
+    const uuid = await extractUuidFromPage(url, { debug: DEBUG_SLUGS.has(slug) })
     if (uuid) log(`  ✓ UUID série [${slug}]: ${uuid}`)
     else log(`  ✗ UUID nenalezeno na ${url}`)
     return uuid
