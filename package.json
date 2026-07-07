@@ -11,7 +11,5 @@
     "scrape:full": "node scraper.mjs --full-only",
     "scrape:703": "node scraper.mjs --703-only"
   },
-  "dependencies": {
-    "playwright": "^1.61.1"
-  }
+  "dependencies": {}
 }

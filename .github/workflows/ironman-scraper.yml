@@ -38,9 +38,6 @@ jobs:
       - name: Instalace závislostí
         run: npm install
 
-      - name: Instalace Playwright prohlížeče
-        run: npx playwright install --with-deps chromium
-
       - name: Sestavení argumentů
         id: args
         run: |
