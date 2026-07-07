@@ -35,7 +35,6 @@ async function probe(url, label) {
         if (m) {
           try {
             const nd = JSON.parse(m[1])
-            console.log(`    ND top keys: ${Object.keys(nd).join(', ')}`)
             console.log(`    buildId:${nd.buildId} page:${nd.page} query:${JSON.stringify(nd.query)}`)
             const pp = nd.props?.pageProps
             if (pp) {
@@ -51,11 +50,10 @@ async function probe(url, label) {
                 }
               }
             }
-            // Find all UUIDs in the entire __NEXT_DATA__ JSON
-            const allText = JSON.stringify(nd)
-            const uuids = [...new Set((allText.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []))]
-            if (uuids.length) console.log(`    UUIDs in ND: ${uuids.slice(0, 5).join(', ')}`)
-            else console.log(`    No UUIDs in __NEXT_DATA__`)
+            // Print full JSON if it contains subevents (for debugging)
+            if (pp?.subevents?.length > 0 || pp?.latestResults?.length > 0) {
+              console.log(`    FULL ND: ${m[1].substring(0, 2000)}`)
+            }
           } catch (e) {
             console.log(`    ND parse error: ${e.message}`)
             console.log(`    ND raw (200 chars): ${m[1].substring(0, 200)}`)
@@ -63,17 +61,9 @@ async function probe(url, label) {
         }
       }
 
-      // Find all UUIDs anywhere in page source (with context for first one)
-      const pageUuids = [...new Set((text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []))]
-      if (pageUuids.length) {
-        console.log(`    Page UUIDs: ${pageUuids.slice(0, 5).join(', ')}`)
-        // Show context around first UUID
-        const firstUuid = pageUuids[0]
-        const idx = text.indexOf(firstUuid)
-        if (idx >= 0) {
-          const ctx = text.substring(Math.max(0, idx - 60), idx + firstUuid.length + 60).replace(/\n/g, ' ')
-          console.log(`    UUID ctx: ...${ctx}...`)
-        }
+      // For short non-HTML responses, print raw
+      if (text.length < 3000 && !hasNextData) {
+        console.log(`    raw: ${text.substring(0, 800).replace(/\n/g, ' ')}`)
       }
     }
     return r.status
@@ -116,27 +106,21 @@ async function main() {
   await probe('https://labs-v2.competitor.com/results/event/ironman-703-austria', 'labs-v2 /results/event/ironman-703-austria')
   await probe('https://labs-v2.competitor.com/results/event/ironman-703-wels', 'labs-v2 /results/event/ironman-703-wels')
 
-  console.log('\n── labs-v2 – API & data endpoints ──')
-  await probe('https://labs-v2.competitor.com/api/events', 'labs-v2 /api/events')
-  await probe('https://labs-v2.competitor.com/api/events?search=frankfurt', 'labs-v2 /api/events?search=frankfurt')
-  await probe('https://labs-v2.competitor.com/api/events?year=2025', 'labs-v2 /api/events?year=2025')
+  console.log('\n── labs-v2: _next/data endpoint (buildId=1782166264455) ──')
+  await probe('https://labs-v2.competitor.com/_next/data/1782166264455/results/event/ironman-frankfurt.json', '_next/data ironman-frankfurt')
+  await probe('https://labs-v2.competitor.com/_next/data/1782166264455/results/event/ironman-703-hradec-kralove.json', '_next/data ironman-703-hradec-kralove')
 
-  console.log('\n── ironman.com results pages (pro extrakci UUID) ──')
-  await probe('https://www.ironman.com/races/im-frankfurt/results', 'ironman.com im-frankfurt results')
-  await probe('https://www.ironman.com/races/im703-hradec-kralove/results', 'ironman.com im703-hradec-kralove results')
-  await probe('https://www.ironman.com/races/im703-st-poelten/results', 'ironman.com im703-st-poelten results')
-  await probe('https://www.ironman.com/races/im-lanzarote/results', 'ironman.com im-lanzarote results')
-  await probe('https://www.ironman.com/races/im-lake-placid/results', 'ironman.com im-lake-placid results')
+  console.log('\n── labs-v2: alternativní API patterny ──')
+  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=test', 'API dummy (baseline 143 bytes)')
+  await probe('https://labs-v2.competitor.com/api/race-results?eventId=im-frankfurt', 'API race-results (staré)')
+  await probe('https://labs-v2.competitor.com/api/event?slug=ironman-frankfurt', 'API event by slug')
+  await probe('https://labs-v2.competitor.com/api/wtc_events', 'API wtc_events list')
+  await probe('https://labs-v2.competitor.com/api/subevents?eventslug=ironman-frankfurt', 'API subevents')
+  await probe('https://labs-v2.competitor.com/api/subevents?slug=ironman-frankfurt', 'API subevents alt')
 
-  console.log('\n── API test s UUID z ironman.com results stránek ──')
-  // UUID z /races/im-frankfurt/results: 09d8fbb6-1333-43ca-a1e3-049040f15194
-  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=09d8fbb6-1333-43ca-a1e3-049040f15194', 'API Frankfurt UUID (z ironman.com)')
-  // UUID z /races/im703-hradec-kralove/results: c5989e51-7f00-41fb-a6c4-0580a988fc5d
-  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=c5989e51-7f00-41fb-a6c4-0580a988fc5d', 'API Hradec UUID (z ironman.com)')
-  // UUID z labs-v2 /results/event/ironman-frankfurt: 48fdddbf-c0b1-4881-98c6-7197fbc12d77
-  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=48fdddbf-c0b1-4881-98c6-7197fbc12d77', 'API labs-v2 frankfurt UUID')
-  // UUID z labs-v2 /results/event/ironman-703-hradec-kralove: 0dcdc0c2-8981-4b31-8b36-05e2a718eaa8
-  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=0dcdc0c2-8981-4b31-8b36-05e2a718eaa8', 'API labs-v2 hradec UUID')
+  console.log('\n── sportstats.one: struktura dat ──')
+  await probe('https://sportstats.one/event/ironman-frankfurt', 'sportstats ironman-frankfurt')
+  await probe('https://www.ironman.com/races/im-frankfurt/results', 'ironman.com im-frankfurt results (obsah)')
 
   console.log('\n═══════════════════════════════════════════════════')
   console.log('Probe hotovo.')
