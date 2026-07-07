@@ -267,11 +267,11 @@ function normalizeResult(raw, race, year) {
     year,
     raceName:     race.name,
     raceType:     race.type,
-    athleteName:  getField(raw, 'athleteName', 'fullName', 'name', 'wtc_name') || fullParts,
+    athleteName:  getField(raw, 'athlete', 'athleteName', 'fullName', 'wtc_name') || fullParts,
     athleteId:    getField(raw, 'athleteId', 'id', 'wtc_athleteid', 'wtc_resultid'),
     country:      'CZE',
     gender:       getField(raw, 'gender', 'sex', 'wtc_gender', 'wtc_sex'),
-    ageGroup:     getField(raw, 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname'),
+    ageGroup:     getField(raw, '_wtc_agegroupid_value_formatted', 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname'),
     overallRank:  getField(raw, 'wtc_finishrank', 'wtc_finishrankoverall', 'overallRank', 'rank', 'position', 'wtc_overallrank'),
     divisionRank: getField(raw, 'wtc_finishrankgroup', 'wtc_bikerankgroup', 'divisionRank', 'ageGroupRank', 'wtc_divisionrank'),
     swimTime:     getField(raw, 'wtc_swimtimeformatted', 'swimTime', 'swim', 'wtc_swimtime', 'swim_time'),
@@ -482,6 +482,7 @@ function printTop10(results) {
     const subset = results
       .filter(r => r.raceType === type)
       .filter(r => r.status && !/dns|dnf|dsq/i.test(r.status))
+      .filter(r => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })
       .sort((a, b) => parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime))
 
     if (subset.length === 0) continue
