@@ -287,7 +287,7 @@ function normalizeResult(raw, race, year) {
 
 // ─── Hlavní scraping ──────────────────────────────────────────────────────────
 
-async function fetchCzechAthletesForRace(race, fromYear, toYear) {
+async function fetchCzechAthletesForRace(race, fromYear, toYear, seenSeriesUuids = new Set()) {
   log(`\n── ${race.name} (${race.type}) ──`)
 
   // Step 1: try primary slug then altSlugs until a series UUID is found
@@ -300,6 +300,12 @@ async function fetchCzechAthletesForRace(race, fromYear, toYear) {
     if (slug !== slugsToTry[slugsToTry.length - 1]) await sleep(500)
   }
   if (!seriesUuid) return []
+
+  if (seenSeriesUuids.has(seriesUuid)) {
+    log(`  ↷ UUID série ${seriesUuid} již zpracován, přeskakuji`)
+    return []
+  }
+  seenSeriesUuids.add(seriesUuid)
 
   // Step 2: try labs-v2 subevents via UUID-based page
   log(`  → labs-v2 subevents pro UUID ${seriesUuid}`)
@@ -473,10 +479,11 @@ async function main() {
   log(`\nCelkem závodů: ${races.length}`)
 
   const allResults = []
+  const seenSeriesUuids = new Set()
 
   for (const race of races) {
     try {
-      const results = await fetchCzechAthletesForRace(race, cfg.fromYear, cfg.toYear)
+      const results = await fetchCzechAthletesForRace(race, cfg.fromYear, cfg.toYear, seenSeriesUuids)
       allResults.push(...results)
     } catch (err) {
       log(`✗ ${race.name}: ${err.message}`)
