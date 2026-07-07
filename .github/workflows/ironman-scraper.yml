@@ -34,10 +34,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
       - name: Instalace závislostí
-        run: npm ci
+        run: npm install
 
       - name: Instalace Playwright prohlížeče
         run: npx playwright install --with-deps chromium
