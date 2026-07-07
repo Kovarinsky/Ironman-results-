@@ -118,9 +118,9 @@ const KNOWN_RACES = [
   { id: 'im703-duisburg',     name: 'Ironman 70.3 Duisburg',              type: '703',  slug: 'im703-duisburg' },
   { id: 'im703-gdynia',       name: 'Ironman 70.3 Gdynia',                type: '703',  slug: 'im703-gdynia' },
   { id: 'im-hawaii',          name: 'Ironman World Championship',         type: 'FULL', slug: 'im-world-championship',  altSlugs: ['im-world-championship-kona'] },
-  // 70.3 WC changes host city each year; series page has no UUID embed — try year-specific slugs
-  { id: 'im703-worlds-2025',  name: 'Ironman 70.3 WC 2025 (Mooloolaba)', type: '703',  slug: 'im703-world-championship-mooloolaba' },
-  { id: 'im703-worlds-2024',  name: 'Ironman 70.3 WC 2024 (Taupō)',      type: '703',  slug: 'im703-world-championship-taupo' },
+  // 70.3 WC changes host city each year; try city-based race slugs (WC shares page with regular race)
+  { id: 'im703-worlds-2025',  name: 'Ironman 70.3 WC 2025 (Mooloolaba)', type: '703',  slug: 'im703-sunshine-coast',            altSlugs: ['im703-mooloolaba', 'im703-australia'] },
+  { id: 'im703-worlds-2024',  name: 'Ironman 70.3 WC 2024 (Taupō)',      type: '703',  slug: 'im703-taupo',                     altSlugs: ['im703-new-zealand'] },
   { id: 'im703-zell',         name: 'Ironman 70.3 Zell am See',           type: '703',  slug: 'im703-zell-am-see' },
   { id: 'im703-elsinore',     name: 'Ironman 70.3 Elsinore',              type: '703',  slug: 'im703-elsinore' },
 ]
@@ -131,20 +131,22 @@ const UUID_RE = /labs-v2\.competitor\.com\/results\/event\/([0-9a-f]{8}-[0-9a-f]
 
 async function extractUuidFromPage(url, { debug = false } = {}) {
   const html = await httpGet(url, { timeout: 7000, allowNotFound: true })
-  if (!html) return null
+  if (!html) {
+    if (debug) log(`  [debug] 404/empty response for ${url}`)
+    return null
+  }
   const m = html.match(UUID_RE)
   if (!m && debug) {
-    // Log snippet to diagnose pages that load but have no labs-v2 UUID
     const snippet = html.replace(/\s+/g, ' ').slice(0, 400)
-    log(`  [debug] html snippet: ${snippet}`)
+    log(`  [debug] html snippet (no UUID): ${snippet}`)
   }
   return m ? m[1] : null
 }
 
 // Slugs that load successfully but have no labs-v2 UUID — enable debug snippet on failure
 const DEBUG_SLUGS = new Set([
-  'im703-world-championship-mooloolaba',
-  'im703-world-championship-taupo',
+  'im703-sunshine-coast', 'im703-mooloolaba', 'im703-australia',
+  'im703-taupo', 'im703-new-zealand',
   'im703-st-polten',
 ])
 
