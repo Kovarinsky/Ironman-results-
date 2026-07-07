@@ -13,6 +13,71 @@ const BASE_HEADERS = {
   'Connection': 'keep-alive',
 }
 
+async function probeDeep(url, label) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const r = await fetch(url, { headers: BASE_HEADERS, signal: ctrl.signal, redirect: 'manual' })
+    clearTimeout(timer)
+    console.log(`${r.status < 400 ? '✓' : '✗'} [${r.status}] ${label}`)
+    if (r.status === 200) {
+      const text = await r.text()
+      console.log(`    len:${text.length}`)
+
+      // Search for event ID / labs-v2 patterns
+      const searches = [
+        { name: 'labs-v2 URL', re: /labs-v2\.competitor\.com[^\s"'<]{5,100}/gi },
+        { name: 'wtc_eventid', re: /wtc_?event_?id[^\s"'<]{0,60}/gi },
+        { name: 'eventId param', re: /eventId[^\s"'<]{0,60}/gi },
+        { name: 'data-event', re: /data-event[^\s"'<]{0,80}/gi },
+        { name: 'iframe labs', re: /<iframe[^>]{0,200}labs-v2[^>]{0,200}>/gi },
+        { name: 'Results config', re: /Results\.[a-z]{0,20}\([^)]{0,200}\)/gi },
+        { name: 'wtcEvent', re: /wtcEvent[^\s"'<]{0,60}/gi },
+        { name: 'event_slug', re: /event_?slug[^\s"'<]{0,60}/gi },
+        { name: 'sportstats API', re: /sportstats[^\s"'<]{0,80}/gi },
+        { name: '"event":{', re: /"event"\s*:\s*\{[^}]{0,150}/g },
+        { name: 'apiUrl', re: /apiUrl[^\s"'<]{0,80}/gi },
+        { name: 'resultsUrl', re: /resultsUrl[^\s"'<]{0,80}/gi },
+      ]
+      let found = false
+      for (const { name, re } of searches) {
+        const matches = [...text.matchAll(re)].slice(0, 3)
+        if (matches.length) {
+          found = true
+          console.log(`    [${name}] ${matches.map(m => m[0].replace(/\n/g,' ').substring(0,120)).join(' | ')}`)
+        }
+      }
+      if (!found) console.log(`    (no patterns found)`)
+
+      // Also check for __NEXT_DATA__ if present
+      if (text.includes('__NEXT_DATA__')) {
+        const m = text.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/)
+        if (m) {
+          try {
+            const nd = JSON.parse(m[1])
+            const pp = nd.props?.pageProps
+            if (pp) {
+              for (const k of Object.keys(pp)) {
+                const v = pp[k]
+                if (Array.isArray(v) && v.length > 0) {
+                  console.log(`    pageProps.${k}: Array(${v.length}) [0]=${JSON.stringify(v[0]).substring(0,200)}`)
+                } else if (!Array.isArray(v)) {
+                  console.log(`    pageProps.${k}: ${JSON.stringify(v)?.substring(0,100)}`)
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+    }
+    return r.status
+  } catch (e) {
+    clearTimeout(timer)
+    console.log(`✗ [ERR] ${label} → ${e.message}`)
+    return 0
+  }
+}
+
 async function probe(url, label) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 15000)
@@ -106,21 +171,14 @@ async function main() {
   await probe('https://labs-v2.competitor.com/results/event/ironman-703-austria', 'labs-v2 /results/event/ironman-703-austria')
   await probe('https://labs-v2.competitor.com/results/event/ironman-703-wels', 'labs-v2 /results/event/ironman-703-wels')
 
-  console.log('\n── labs-v2: _next/data endpoint (buildId=1782166264455) ──')
-  await probe('https://labs-v2.competitor.com/_next/data/1782166264455/results/event/ironman-frankfurt.json', '_next/data ironman-frankfurt')
-  await probe('https://labs-v2.competitor.com/_next/data/1782166264455/results/event/ironman-703-hradec-kralove.json', '_next/data ironman-703-hradec-kralove')
+  console.log('\n── DEEP SCAN: ironman.com results pages ──')
+  await probeDeep('https://www.ironman.com/races/im-frankfurt/results', 'ironman.com im-frankfurt/results')
+  await probeDeep('https://www.ironman.com/races/im703-hradec-kralove/results', 'ironman.com im703-hradec-kralove/results')
+  await probeDeep('https://www.ironman.com/races/im-lanzarote/results', 'ironman.com im-lanzarote/results')
 
-  console.log('\n── labs-v2: alternativní API patterny ──')
-  await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=test', 'API dummy (baseline 143 bytes)')
-  await probe('https://labs-v2.competitor.com/api/race-results?eventId=im-frankfurt', 'API race-results (staré)')
-  await probe('https://labs-v2.competitor.com/api/event?slug=ironman-frankfurt', 'API event by slug')
-  await probe('https://labs-v2.competitor.com/api/wtc_events', 'API wtc_events list')
-  await probe('https://labs-v2.competitor.com/api/subevents?eventslug=ironman-frankfurt', 'API subevents')
-  await probe('https://labs-v2.competitor.com/api/subevents?slug=ironman-frankfurt', 'API subevents alt')
-
-  console.log('\n── sportstats.one: struktura dat ──')
-  await probe('https://sportstats.one/event/ironman-frankfurt', 'sportstats ironman-frankfurt')
-  await probe('https://www.ironman.com/races/im-frankfurt/results', 'ironman.com im-frankfurt results (obsah)')
+  console.log('\n── DEEP SCAN: sportstats.one ──')
+  await probeDeep('https://sportstats.one/event/ironman-frankfurt', 'sportstats.one ironman-frankfurt')
+  await probeDeep('https://sportstats.one/event/ironman-703-czech-republic', 'sportstats.one ironman-703-czech-republic')
 
   console.log('\n═══════════════════════════════════════════════════')
   console.log('Probe hotovo.')
