@@ -60,7 +60,9 @@ const cfg = {
     : args.includes('--703-only')
     ? ['703']
     : ['FULL', '703'],
-  raceFilter: getArg('--race', null),
+  raceFilter:     getArg('--race', null),
+  genderFilter:   (getArg('--gender', '') || '').toUpperCase().trim() || null,
+  ageGroupFilter: (getArg('--age-group', '') || '').trim() || null,
   outputDir: getArg('--output', join(process.cwd(), 'data')),
   dryRun: args.includes('--dry-run'),
 }
@@ -265,10 +267,21 @@ function extractYear(obj) {
   return null
 }
 
+// Derive gender from age group code (F.../FPRO → F, M.../MPRO → M)
+function genderFromAgeGroup(ag) {
+  if (!ag) return null
+  if (/^F(PRO|\d)/i.test(ag)) return 'F'
+  if (/^M(PRO|\d)/i.test(ag)) return 'M'
+  return null
+}
+
 function normalizeResult(raw, race, year) {
   const firstName = getField(raw, 'wtc_firstname', 'firstName', 'first_name', 'givenName')
   const lastName  = getField(raw, 'wtc_lastname',  'lastName',  'last_name',  'familyName')
   const fullParts = [firstName, lastName].filter(Boolean).join(' ')
+
+  const ageGroup = getField(raw, '_wtc_agegroupid_value_formatted', 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname')
+  const gender   = genderFromAgeGroup(ageGroup) || ''
 
   return {
     year,
@@ -277,8 +290,8 @@ function normalizeResult(raw, race, year) {
     athleteName:  getField(raw, 'athlete', 'athleteName', 'fullName', 'wtc_name') || fullParts,
     athleteId:    getField(raw, 'athleteId', 'id', 'wtc_athleteid', 'wtc_resultid'),
     country:      'CZE',
-    gender:       getField(raw, 'gender', 'sex', 'wtc_gender', 'wtc_sex'),
-    ageGroup:     getField(raw, '_wtc_agegroupid_value_formatted', 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname'),
+    gender,
+    ageGroup,
     overallRank:  getField(raw, 'wtc_finishrank', 'wtc_finishrankoverall', 'overallRank', 'rank', 'position', 'wtc_overallrank'),
     divisionRank: getField(raw, 'wtc_finishrankgroup', 'wtc_bikerankgroup', 'divisionRank', 'ageGroupRank', 'wtc_divisionrank'),
     swimTime:     getField(raw, 'wtc_swimtimeformatted', 'swimTime', 'swim', 'wtc_swimtime', 'swim_time'),
@@ -484,32 +497,38 @@ function printTop10(results) {
   console.log(`║   TOP 10 českých závodníků  –  ${yearLabel.padEnd(34)}║`)
   console.log('╚══════════════════════════════════════════════════════════════════╝')
 
+  const isFinisher = r =>
+    (!r.status || !/dns|dnf|dsq/i.test(r.status)) &&
+    (() => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })()
+
   for (const type of ['FULL', '703']) {
-    const label = type === 'FULL' ? 'Ironman (plná vzdálenost)' : 'Ironman 70.3'
-    const subset = results
-      .filter(r => r.raceType === type)
-      .filter(r => r.status && !/dns|dnf|dsq/i.test(r.status))
-      .filter(r => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })
-      .sort((a, b) => parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime))
+    const typeLabel = type === 'FULL' ? 'Ironman (plná vzdálenost)' : 'Ironman 70.3'
+    const typeResults = results.filter(r => r.raceType === type).filter(isFinisher)
+    if (typeResults.length === 0) continue
 
-    if (subset.length === 0) continue
+    console.log(`\n  ══ ${typeLabel} ══════════════════════════════════════════════`)
 
-    console.log(`\n  ── ${label} ─────────────────────────────────────────────────`)
-    console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Závod'.padEnd(24)} ${'Rok'.padEnd(5)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(7)} ${'Kat.'}`)
-    console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(24)} ${'─'.repeat(5)} ${'─'.repeat(10)} ${'─'.repeat(7)} ${'─'.repeat(12)}`)
+    for (const [gLabel, gCode] of [['♀ Ženy', 'F'], ['♂ Muži', 'M']]) {
+      const subset = typeResults
+        .filter(r => r.gender === gCode)
+        .sort((a, b) => parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime))
+      if (subset.length === 0) continue
 
-    const top = subset.slice(0, 10)
-    top.forEach((r, i) => {
-      const rank = String(i + 1).padEnd(3)
-      const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
-      const race = r.raceName.replace(/^Ironman\s*/i, '').substring(0, 23).padEnd(24)
-      const yr   = String(r.year).padEnd(5)
-      const time = (r.finishTime || '?').padEnd(10)
-      const pos  = String(r.overallRank || '?').padEnd(7)
-      const cat  = r.ageGroup || ''
-      console.log(`  ${rank} ${name} ${race} ${yr} ${time} ${pos} ${cat}`)
-    })
-    console.log(`\n  Celkem finišerů z ČR: ${subset.length}`)
+      console.log(`\n  ── ${gLabel} ──────────────────────────────────────────────`)
+      console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Závod'.padEnd(22)} ${'Rok'.padEnd(5)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(7)} ${'Kat.'}`)
+      console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(22)} ${'─'.repeat(5)} ${'─'.repeat(10)} ${'─'.repeat(7)} ${'─'.repeat(12)}`)
+      subset.slice(0, 10).forEach((r, i) => {
+        const rank = String(i + 1).padEnd(3)
+        const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
+        const race = r.raceName.replace(/^Ironman\s*/i, '').substring(0, 21).padEnd(22)
+        const yr   = String(r.year).padEnd(5)
+        const time = (r.finishTime || '?').padEnd(10)
+        const pos  = String(r.overallRank || '?').padEnd(7)
+        const cat  = r.ageGroup || ''
+        console.log(`  ${rank} ${name} ${race} ${yr} ${time} ${pos} ${cat}`)
+      })
+      console.log(`\n  Celkem finišerů z ČR: ${subset.length}`)
+    }
   }
 
   console.log('\n══════════════════════════════════════════════════════════════════\n')
@@ -517,20 +536,31 @@ function printTop10(results) {
 
 // ─── Výpis všech výsledků pro konkrétní závod ────────────────────────────────
 
+function printAthleteTable(athletes) {
+  if (athletes.length === 0) return
+  console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(8)} ${'Kat.'.padEnd(12)} ${'Plav.'.padEnd(9)} ${'Kolo'.padEnd(9)} ${'Běh'}`)
+  console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(12)} ${'─'.repeat(9)} ${'─'.repeat(9)} ${'─'.repeat(9)}`)
+  athletes.forEach((r, i) => {
+    const pos  = String(i + 1).padEnd(3)
+    const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
+    const time = (r.finishTime || '?').padEnd(10)
+    const rank = String(r.overallRank || '?').padEnd(8)
+    const cat  = (r.ageGroup || '').substring(0, 11).padEnd(12)
+    const swim = (r.swimTime || '').padEnd(9)
+    const bike = (r.bikeTime || '').padEnd(9)
+    const run  = (r.runTime || '').padEnd(9)
+    console.log(`  ${pos} ${name} ${time} ${rank} ${cat} ${swim} ${bike} ${run}`)
+  })
+}
+
 function printRaceResults(results, raceId) {
   const raceName = KNOWN_RACES.find(r => r.id === raceId)?.name ?? raceId
-  const finishers = results
-    .filter(r => r.status && !/dns|dnf|dsq/i.test(r.status))
-    .filter(r => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })
-    .sort((a, b) => {
-      if (a.year !== b.year) return b.year - a.year
-      return parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime)
-    })
 
-  const dnf = results.filter(r => r.status && /dnf|dns|dsq/i.test(r.status))
-  const noTime = results.filter(r => {
-    const s = parseTimeToSeconds(r.finishTime); return s === 0 || s === Infinity
-  }).filter(r => r.status && !/dnf|dns|dsq/i.test(r.status))
+  const isFinisher = r =>
+    (!r.status || !/dns|dnf|dsq/i.test(r.status)) &&
+    (() => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })()
+
+  const byTime = (a, b) => parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime)
 
   console.log('\n╔══════════════════════════════════════════════════════════════════════════════╗')
   console.log(`║   Čeští závodníci – ${raceName.padEnd(56)}║`)
@@ -538,32 +568,33 @@ function printRaceResults(results, raceId) {
 
   const years = [...new Set(results.map(r => r.year))].sort((a, b) => b - a)
   for (const yr of years) {
-    const yrFinishers = finishers.filter(r => r.year === yr)
-    const yrDnf = [...dnf, ...noTime].filter(r => r.year === yr)
+    const yrAll      = results.filter(r => r.year === yr)
+    const yrFinish   = yrAll.filter(isFinisher)
+    const yrDnf      = yrAll.filter(r => !isFinisher(r))
+
     console.log(`\n  ── ${yr} ──────────────────────────────────────────────────────────────────`)
-    if (yrFinishers.length === 0 && yrDnf.length === 0) {
-      console.log('  (žádní čeští závodníci)')
-      continue
+    if (yrAll.length === 0) { console.log('  (žádní čeští závodníci)'); continue }
+
+    const women  = yrFinish.filter(r => r.gender === 'F').sort(byTime)
+    const men    = yrFinish.filter(r => r.gender === 'M').sort(byTime)
+    const other  = yrFinish.filter(r => !r.gender).sort(byTime)
+
+    if (women.length > 0) {
+      console.log(`\n  ♀ Ženy (${women.length})`)
+      printAthleteTable(women)
     }
-    if (yrFinishers.length > 0) {
-      console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(8)} ${'Kat.'.padEnd(12)} ${'Plav.'.padEnd(9)} ${'Kolo'.padEnd(9)} ${'Běh'}`)
-      console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(12)} ${'─'.repeat(9)} ${'─'.repeat(9)} ${'─'.repeat(9)}`)
-      yrFinishers.forEach((r, i) => {
-        const pos  = String(i + 1).padEnd(3)
-        const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
-        const time = (r.finishTime || '?').padEnd(10)
-        const rank = String(r.overallRank || '?').padEnd(8)
-        const cat  = (r.ageGroup || '').substring(0, 11).padEnd(12)
-        const swim = (r.swimTime || '').padEnd(9)
-        const bike = (r.bikeTime || '').padEnd(9)
-        const run  = (r.runTime || '').padEnd(9)
-        console.log(`  ${pos} ${name} ${time} ${rank} ${cat} ${swim} ${bike} ${run}`)
-      })
+    if (men.length > 0) {
+      console.log(`\n  ♂ Muži (${men.length})`)
+      printAthleteTable(men)
+    }
+    if (other.length > 0) {
+      console.log(`\n  ? Neznámé pohlaví (${other.length})`)
+      printAthleteTable(other)
     }
     if (yrDnf.length > 0) {
-      console.log(`\n  DNF/DNS/DSQ: ${yrDnf.map(r => `${r.athleteName || '?'} (${r.status})`).join(', ')}`)
+      console.log(`\n  DNF/DNS/DSQ: ${yrDnf.map(r => `${r.athleteName || '?'} (${r.status || '?'})`).join(', ')}`)
     }
-    console.log(`\n  Celkem: ${yrFinishers.length} finišerů, ${yrDnf.length} DNF/DNS`)
+    console.log(`\n  Celkem: ${women.length + men.length + other.length} finišerů (${women.length}Ž / ${men.length}M), ${yrDnf.length} DNF/DNS`)
   }
   console.log('\n══════════════════════════════════════════════════════════════════════════════\n')
 }
@@ -612,10 +643,22 @@ async function main() {
     await sleep(600)
   }
 
+  // Apply post-fetch filters
+  let filteredResults = allResults
+  if (cfg.genderFilter) {
+    filteredResults = filteredResults.filter(r => r.gender === cfg.genderFilter)
+    log(`Filtr pohlaví: ${cfg.genderFilter === 'F' ? 'ženy' : 'muži'} → ${filteredResults.length} výsledků`)
+  }
+  if (cfg.ageGroupFilter) {
+    const agf = cfg.ageGroupFilter.toLowerCase()
+    filteredResults = filteredResults.filter(r => (r.ageGroup || '').toLowerCase().includes(agf))
+    log(`Filtr věk. kat.: ${cfg.ageGroupFilter} → ${filteredResults.length} výsledků`)
+  }
+
   if (cfg.raceFilter) {
-    printRaceResults(allResults, cfg.raceFilter)
+    printRaceResults(filteredResults, cfg.raceFilter)
   } else {
-    printTop10(allResults)
+    printTop10(filteredResults)
   }
 
   // Per-year JSON files

@@ -27,6 +27,20 @@ on:
         required: false
         default: ""
         type: string
+      pohlavi:
+        description: "Pohlaví závodníků"
+        required: false
+        default: "oba"
+        type: choice
+        options:
+          - oba
+          - zeny
+          - muzi
+      vekova_kategorie:
+        description: "Věková kategorie (např. M40-44, F35-39, MPRO). Prázdné = všechny kategorie."
+        required: false
+        default: ""
+        type: string
 
 jobs:
   scrape:
@@ -54,6 +68,14 @@ jobs:
           fi
           if [ -n "${{ inputs.zavod }}" ]; then
             ARGS="$ARGS --race ${{ inputs.zavod }}"
+          fi
+          if [ "${{ inputs.pohlavi }}" = "zeny" ]; then
+            ARGS="$ARGS --gender F"
+          elif [ "${{ inputs.pohlavi }}" = "muzi" ]; then
+            ARGS="$ARGS --gender M"
+          fi
+          if [ -n "${{ inputs.vekova_kategorie }}" ]; then
+            ARGS="$ARGS --age-group ${{ inputs.vekova_kategorie }}"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 
