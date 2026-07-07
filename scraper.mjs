@@ -106,23 +106,23 @@ async function httpGet(url, { asJson = false, timeout = 25000, referer, allowNot
 // ─── Závody ───────────────────────────────────────────────────────────────────
 
 const KNOWN_RACES = [
-  { id: 'im-frankfurt',    name: 'Ironman Frankfurt',               type: 'FULL', slug: 'im-frankfurt' },
-  { id: 'im703-hradec',    name: 'Ironman 70.3 Hradec Králové',     type: '703',  slug: 'im703-hradec-kralove' },
-  { id: 'im703-stpoelten', name: 'Ironman 70.3 St. Pölten',         type: '703',  slug: 'im703-st-poelten',        altSlugs: ['im703-st-polten'] },
-  { id: 'im-lanzarote',    name: 'Ironman Lanzarote',               type: 'FULL', slug: 'im-lanzarote' },
-  { id: 'im-austria',      name: 'Ironman Austria (Klagenfurt)',    type: 'FULL', slug: 'im-austria' },
-  { id: 'im703-austria',   name: 'Ironman 70.3 Austria',            type: '703',  slug: 'im703-austria' },
-  { id: 'im-barcelona',    name: 'Ironman Barcelona',               type: 'FULL', slug: 'im-barcelona' },
-  { id: 'im-copenhagen',   name: 'Ironman Copenhagen',              type: 'FULL', slug: 'im-copenhagen' },
-  { id: 'im-hamburg',      name: 'Ironman Hamburg',                 type: 'FULL', slug: 'im-hamburg' },
-  { id: 'im703-hamburg',   name: 'Ironman 70.3 Hamburg',            type: '703',  slug: 'im703-hamburg' },
-  { id: 'im703-duisburg',  name: 'Ironman 70.3 Duisburg',           type: '703',  slug: 'im703-duisburg' },
-  { id: 'im703-gdynia',    name: 'Ironman 70.3 Gdynia',             type: '703',  slug: 'im703-gdynia' },
-  { id: 'im-hawaii',       name: 'Ironman World Championship',      type: 'FULL', slug: 'im-world-championship',  altSlugs: ['im-world-championship-kona'] },
-  { id: 'im-nice',         name: 'Ironman WC Nice',                 type: 'FULL', slug: 'im-world-championship-nice' },
-  { id: 'im703-worlds',    name: 'Ironman 70.3 World Championship', type: '703',  slug: 'im703-world-championship' },
-  { id: 'im703-zell',      name: 'Ironman 70.3 Zell am See',        type: '703',  slug: 'im703-zell-am-see' },
-  { id: 'im703-elsinore',  name: 'Ironman 70.3 Elsinore',           type: '703',  slug: 'im703-elsinore' },
+  { id: 'im-frankfurt',       name: 'Ironman Frankfurt',                  type: 'FULL', slug: 'im-frankfurt' },
+  { id: 'im703-hradec',       name: 'Ironman 70.3 Hradec Králové',        type: '703',  slug: 'im703-hradec-kralove' },
+  // im703-st-poelten returns 403 from GitHub IPs; altSlug page loads but has no labs-v2 UUID embed
+  { id: 'im703-stpoelten',    name: 'Ironman 70.3 St. Pölten',            type: '703',  slug: 'im703-st-poelten',       altSlugs: ['im703-st-polten'] },
+  { id: 'im-lanzarote',       name: 'Ironman Lanzarote',                  type: 'FULL', slug: 'im-lanzarote' },
+  { id: 'im-austria',         name: 'Ironman Austria (Klagenfurt)',       type: 'FULL', slug: 'im-austria' },
+  { id: 'im-barcelona',       name: 'Ironman Barcelona',                  type: 'FULL', slug: 'im-barcelona' },
+  { id: 'im-copenhagen',      name: 'Ironman Copenhagen',                 type: 'FULL', slug: 'im-copenhagen' },
+  { id: 'im-hamburg',         name: 'Ironman Hamburg',                    type: 'FULL', slug: 'im-hamburg' },
+  { id: 'im703-duisburg',     name: 'Ironman 70.3 Duisburg',              type: '703',  slug: 'im703-duisburg' },
+  { id: 'im703-gdynia',       name: 'Ironman 70.3 Gdynia',                type: '703',  slug: 'im703-gdynia' },
+  { id: 'im-hawaii',          name: 'Ironman World Championship',         type: 'FULL', slug: 'im-world-championship',  altSlugs: ['im-world-championship-kona'] },
+  // 70.3 WC changes host city each year; series page has no UUID embed — try year-specific slugs
+  { id: 'im703-worlds-2025',  name: 'Ironman 70.3 WC 2025 (Mooloolaba)', type: '703',  slug: 'im703-world-championship-mooloolaba' },
+  { id: 'im703-worlds-2024',  name: 'Ironman 70.3 WC 2024 (Taupō)',      type: '703',  slug: 'im703-world-championship-taupo' },
+  { id: 'im703-zell',         name: 'Ironman 70.3 Zell am See',           type: '703',  slug: 'im703-zell-am-see' },
+  { id: 'im703-elsinore',     name: 'Ironman 70.3 Elsinore',              type: '703',  slug: 'im703-elsinore' },
 ]
 
 // ─── UUID discovery ───────────────────────────────────────────────────────────
