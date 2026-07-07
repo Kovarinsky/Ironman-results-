@@ -25,19 +25,46 @@ async function probe(url, label) {
     if (loc) console.log(`    → redirect: ${loc}`)
     if (r.status === 200) {
       const text = await r.text()
-      // Look for key markers in the HTML
       const hasNextData = text.includes('__NEXT_DATA__')
-      const hasWtcEventId = text.includes('wtc_eventid')
       const hasResults = text.includes('results') && text.length > 5000
       const hasCze = text.includes('CZE') || text.includes('Czech')
-      const snip = text.substring(0, 200).replace(/\n/g, ' ')
-      console.log(`    __NEXT_DATA__:${hasNextData} wtc_eventid:${hasWtcEventId} results:${hasResults} CZE:${hasCze}`)
-      console.log(`    preview: ${snip}`)
-      // Extract wtc_eventid if present
-      const uuidMatch = text.match(/"wtc_eventid"\s*:\s*"([^"]+)"/g)
-      if (uuidMatch) {
-        console.log(`    wtc_eventids: ${uuidMatch.slice(0, 3).join(', ')}`)
+      console.log(`    __NEXT_DATA__:${hasNextData} results:${hasResults} CZE:${hasCze} len:${text.length}`)
+
+      if (hasNextData) {
+        const m = text.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/)
+        if (m) {
+          try {
+            const nd = JSON.parse(m[1])
+            console.log(`    ND top keys: ${Object.keys(nd).join(', ')}`)
+            const pp = nd.props?.pageProps
+            if (pp) {
+              console.log(`    pageProps keys: ${Object.keys(pp).join(', ')}`)
+              for (const k of Object.keys(pp).slice(0, 15)) {
+                const v = pp[k]
+                if (Array.isArray(v)) {
+                  console.log(`      .${k}: Array(${v.length})${v[0] ? ' [0]keys:' + Object.keys(v[0]).join(',') : ''}`)
+                } else if (v && typeof v === 'object') {
+                  console.log(`      .${k}: {${Object.keys(v).join(',')}}`)
+                } else {
+                  console.log(`      .${k}: ${JSON.stringify(v)?.substring(0, 80)}`)
+                }
+              }
+            }
+            // Find all UUIDs in the entire __NEXT_DATA__ JSON
+            const allText = JSON.stringify(nd)
+            const uuids = [...new Set((allText.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []))]
+            if (uuids.length) console.log(`    UUIDs in ND: ${uuids.slice(0, 5).join(', ')}`)
+            else console.log(`    No UUIDs in __NEXT_DATA__`)
+          } catch (e) {
+            console.log(`    ND parse error: ${e.message}`)
+            console.log(`    ND raw (200 chars): ${m[1].substring(0, 200)}`)
+          }
+        }
       }
+
+      // Find all UUIDs anywhere in page source
+      const pageUuids = [...new Set((text.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi) || []))]
+      if (pageUuids.length) console.log(`    Page UUIDs: ${pageUuids.slice(0, 5).join(', ')}`)
     }
     return r.status
   } catch (e) {
@@ -69,24 +96,26 @@ async function main() {
   await probe('https://labs-v2.competitor.com/results/event/ironman-european-championship-frankfurt', 'labs-v2 /results/event/ironman-european-championship-frankfurt')
   await probe('https://labs-v2.competitor.com/api/results?wtc_eventid=test', 'labs-v2 /api/results (dummy id)')
 
-  console.log('\n── sportstats.one ──')
-  await probe('https://sportstats.one/', 'sportstats.one homepage')
-  await probe('https://sportstats.one/event/ironman-frankfurt', 'sportstats.one /event/ironman-frankfurt')
-  await probe('https://sportstats.one/event/ironman-european-championship-frankfurt', 'sportstats.one /event/ironman-european-championship-frankfurt')
-  await probe('https://sportstats.one/event/ironman-world-championship', 'sportstats.one /event/ironman-world-championship')
+  console.log('\n── labs-v2 – další závody ──')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-czech-republic', 'labs-v2 /results/event/ironman-703-czech-republic')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-hradec-kralove', 'labs-v2 /results/event/ironman-703-hradec-kralove')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-st-polten', 'labs-v2 /results/event/ironman-703-st-polten')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-st-poelten', 'labs-v2 /results/event/ironman-703-st-poelten')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-klagenfurt', 'labs-v2 /results/event/ironman-klagenfurt')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-klagenfurt', 'labs-v2 /results/event/ironman-703-klagenfurt')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-austria', 'labs-v2 /results/event/ironman-703-austria')
+  await probe('https://labs-v2.competitor.com/results/event/ironman-703-wels', 'labs-v2 /results/event/ironman-703-wels')
 
-  console.log('\n── ironman.com – různé závody (2025) ──')
-  await probe('https://www.ironman.com/races/im-klagenfurt', 'ironman.com /races/im-klagenfurt')
-  await probe('https://www.ironman.com/races/im-klagenfurt/results', 'ironman.com /races/im-klagenfurt/results')
-  await probe('https://www.ironman.com/races/im703-czech-republic', 'ironman.com /races/im703-czech-republic')
+  console.log('\n── labs-v2 – API & data endpoints ──')
+  await probe('https://labs-v2.competitor.com/api/events', 'labs-v2 /api/events')
+  await probe('https://labs-v2.competitor.com/api/events?search=frankfurt', 'labs-v2 /api/events?search=frankfurt')
+  await probe('https://labs-v2.competitor.com/api/events?year=2025', 'labs-v2 /api/events?year=2025')
+
+  console.log('\n── ironman.com – správné slugy (2025/2026) ──')
   await probe('https://www.ironman.com/races/im703-hradec-kralove', 'ironman.com /races/im703-hradec-kralove')
-  await probe('https://www.ironman.com/races/ironman-703-hradec-kralove', 'ironman.com /races/ironman-703-hradec-kralove')
-  await probe('https://www.ironman.com/races/im703-stpoelten', 'ironman.com /races/im703-stpoelten')
-  await probe('https://www.ironman.com/races/im703-st-poelten', 'ironman.com /races/im703-st-poelten [OLD]')
-
-  console.log('\n── ironman.com – search/list endpoints ──')
-  await probe('https://www.ironman.com/api/races?year=2025', 'ironman.com /api/races?year=2025')
-  await probe('https://www.ironman.com/umbraco/api/races/getall', 'ironman.com umbraco /api/races/getall')
+  await probe('https://www.ironman.com/races/im703-hradec-kralove/results', 'ironman.com /races/im703-hradec-kralove/results')
+  await probe('https://www.ironman.com/races/im-klagenfurt', 'ironman.com /races/im-klagenfurt')
+  await probe('https://www.ironman.com/races/im-frankfurt/results', 'ironman.com /races/im-frankfurt/results')
 
   console.log('\n═══════════════════════════════════════════════════')
   console.log('Probe hotovo.')
