@@ -22,6 +22,11 @@ on:
           - oba
           - full-only
           - 703-only
+      zavod:
+        description: "Filtr na konkrétní závod (ID, např. im-switzerland, im-austria). Prázdné = všechny závody."
+        required: false
+        default: ""
+        type: string
 
 jobs:
   scrape:
@@ -46,6 +51,9 @@ jobs:
             ARGS="$ARGS --full-only"
           elif [ "${{ inputs.typ_zavodu }}" = "703-only" ]; then
             ARGS="$ARGS --703-only"
+          fi
+          if [ -n "${{ inputs.zavod }}" ]; then
+            ARGS="$ARGS --race ${{ inputs.zavod }}"
           fi
           echo "args=$ARGS" >> $GITHUB_OUTPUT
 

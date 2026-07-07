@@ -30,7 +30,12 @@ Ironman výsledky scraper – čeští závodníci (CZE)
 
 Použití:
   node scraper.mjs [--from 2020] [--to 2026] [--year 2024]
-                   [--full-only | --703-only] [--output ./data] [--dry-run]
+                   [--full-only | --703-only] [--race <id>]
+                   [--output ./data] [--dry-run]
+
+Příklady:
+  node scraper.mjs --race im-switzerland --year 2026
+  node scraper.mjs --race im-austria --from 2023 --to 2026
 `)
   process.exit(0)
 }
@@ -55,6 +60,7 @@ const cfg = {
     : args.includes('--703-only')
     ? ['703']
     : ['FULL', '703'],
+  raceFilter: getArg('--race', null),
   outputDir: getArg('--output', join(process.cwd(), 'data')),
   dryRun: args.includes('--dry-run'),
 }
@@ -509,6 +515,59 @@ function printTop10(results) {
   console.log('\n══════════════════════════════════════════════════════════════════\n')
 }
 
+// ─── Výpis všech výsledků pro konkrétní závod ────────────────────────────────
+
+function printRaceResults(results, raceId) {
+  const raceName = KNOWN_RACES.find(r => r.id === raceId)?.name ?? raceId
+  const finishers = results
+    .filter(r => r.status && !/dns|dnf|dsq/i.test(r.status))
+    .filter(r => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })
+    .sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year
+      return parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime)
+    })
+
+  const dnf = results.filter(r => r.status && /dnf|dns|dsq/i.test(r.status))
+  const noTime = results.filter(r => {
+    const s = parseTimeToSeconds(r.finishTime); return s === 0 || s === Infinity
+  }).filter(r => r.status && !/dnf|dns|dsq/i.test(r.status))
+
+  console.log('\n╔══════════════════════════════════════════════════════════════════════════════╗')
+  console.log(`║   Čeští závodníci – ${raceName.padEnd(56)}║`)
+  console.log('╚══════════════════════════════════════════════════════════════════════════════╝')
+
+  const years = [...new Set(results.map(r => r.year))].sort((a, b) => b - a)
+  for (const yr of years) {
+    const yrFinishers = finishers.filter(r => r.year === yr)
+    const yrDnf = [...dnf, ...noTime].filter(r => r.year === yr)
+    console.log(`\n  ── ${yr} ──────────────────────────────────────────────────────────────────`)
+    if (yrFinishers.length === 0 && yrDnf.length === 0) {
+      console.log('  (žádní čeští závodníci)')
+      continue
+    }
+    if (yrFinishers.length > 0) {
+      console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(8)} ${'Kat.'.padEnd(12)} ${'Plav.'.padEnd(9)} ${'Kolo'.padEnd(9)} ${'Běh'}`)
+      console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(10)} ${'─'.repeat(8)} ${'─'.repeat(12)} ${'─'.repeat(9)} ${'─'.repeat(9)} ${'─'.repeat(9)}`)
+      yrFinishers.forEach((r, i) => {
+        const pos  = String(i + 1).padEnd(3)
+        const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
+        const time = (r.finishTime || '?').padEnd(10)
+        const rank = String(r.overallRank || '?').padEnd(8)
+        const cat  = (r.ageGroup || '').substring(0, 11).padEnd(12)
+        const swim = (r.swimTime || '').padEnd(9)
+        const bike = (r.bikeTime || '').padEnd(9)
+        const run  = (r.runTime || '').padEnd(9)
+        console.log(`  ${pos} ${name} ${time} ${rank} ${cat} ${swim} ${bike} ${run}`)
+      })
+    }
+    if (yrDnf.length > 0) {
+      console.log(`\n  DNF/DNS/DSQ: ${yrDnf.map(r => `${r.athleteName || '?'} (${r.status})`).join(', ')}`)
+    }
+    console.log(`\n  Celkem: ${yrFinishers.length} finišerů, ${yrDnf.length} DNF/DNS`)
+  }
+  console.log('\n══════════════════════════════════════════════════════════════════════════════\n')
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -521,7 +580,16 @@ async function main() {
 
   ensureDir(cfg.outputDir)
 
-  const races = KNOWN_RACES.filter(r => cfg.raceTypes.includes(r.type))
+  let races = KNOWN_RACES.filter(r => cfg.raceTypes.includes(r.type))
+  if (cfg.raceFilter) {
+    const matched = races.filter(r => r.id === cfg.raceFilter)
+    if (matched.length === 0) {
+      console.error(`\n✗ Závod '${cfg.raceFilter}' nenalezen. Dostupné ID: ${KNOWN_RACES.map(r => r.id).join(', ')}`)
+      process.exit(1)
+    }
+    races = matched
+    console.log(`Filtr: pouze ${matched[0].name}`)
+  }
 
   if (cfg.dryRun) {
     console.log(`\n[DRY RUN] ${races.length} závodů:`)
@@ -544,7 +612,11 @@ async function main() {
     await sleep(600)
   }
 
-  printTop10(allResults)
+  if (cfg.raceFilter) {
+    printRaceResults(allResults, cfg.raceFilter)
+  } else {
+    printTop10(allResults)
+  }
 
   // Per-year JSON files
   const byYear = {}
