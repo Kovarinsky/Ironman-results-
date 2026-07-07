@@ -123,7 +123,7 @@ const KNOWN_RACES = [
   { id: 'im703-new-zealand',    name: 'Ironman 70.3 New Zealand',         type: '703',  slug: 'im703-new-zealand' },
   { id: 'im703-zell',         name: 'Ironman 70.3 Zell am See',           type: '703',  slug: 'im703-zell-am-see' },
   { id: 'im703-elsinore',     name: 'Ironman 70.3 Elsinore',              type: '703',  slug: 'im703-elsinore' },
-  { id: 'im703-thun',         name: 'Ironman 70.3 Thun',                  type: '703',  slug: 'im703-thun' },
+  { id: 'im-switzerland',     name: 'Ironman Switzerland (Thun)',          type: 'FULL', slug: 'im-switzerland', altSlugs: ['im-thun'] },
 ]
 
 // ─── UUID discovery ───────────────────────────────────────────────────────────
