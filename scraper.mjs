@@ -599,6 +599,50 @@ function printRaceResults(results, raceId) {
   console.log('\n══════════════════════════════════════════════════════════════════════════════\n')
 }
 
+// ─── DNF přehled ─────────────────────────────────────────────────────────────
+
+function printDnfSummary(results) {
+  const isFinisher = r =>
+    (!r.status || !/dns|dnf|dsq/i.test(r.status)) &&
+    (() => { const s = parseTimeToSeconds(r.finishTime); return s > 0 && s < Infinity })()
+
+  const dnfAll = results.filter(r => !isFinisher(r))
+  if (dnfAll.length === 0) {
+    console.log('\n  (žádné DNF/DNS/DSQ záznamy)\n')
+    return
+  }
+
+  console.log('\n╔══════════════════════════════════════════════════════════════════════════════╗')
+  console.log('║   DNF / DNS / DSQ – čeští závodníci                                        ║')
+  console.log('╚══════════════════════════════════════════════════════════════════════════════╝')
+
+  // Group by race, then by year
+  const byRace = {}
+  for (const r of dnfAll) {
+    byRace[r.raceName] = byRace[r.raceName] ?? {}
+    byRace[r.raceName][r.year] = byRace[r.raceName][r.year] ?? []
+    byRace[r.raceName][r.year].push(r)
+  }
+
+  for (const raceName of Object.keys(byRace).sort()) {
+    const byYear = byRace[raceName]
+    console.log(`\n  ── ${raceName} ──`)
+    for (const yr of Object.keys(byYear).sort((a, b) => b - a)) {
+      const athletes = byYear[yr]
+      console.log(`    ${yr}  (${athletes.length}×):`)
+      for (const r of athletes) {
+        const gend = r.gender === 'F' ? '♀' : r.gender === 'M' ? '♂' : '?'
+        const cat  = r.ageGroup ? ` [${r.ageGroup}]` : ''
+        const st   = r.status || 'DNF'
+        console.log(`      ${gend} ${r.athleteName || '?'}${cat}  – ${st}`)
+      }
+    }
+  }
+
+  console.log(`\n  Celkem DNF/DNS/DSQ: ${dnfAll.length}`)
+  console.log('══════════════════════════════════════════════════════════════════════════════\n')
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -659,6 +703,7 @@ async function main() {
     printRaceResults(filteredResults, cfg.raceFilter)
   } else {
     printTop10(filteredResults)
+    printDnfSummary(filteredResults)
   }
 
   // Per-year JSON files
