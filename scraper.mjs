@@ -456,6 +456,57 @@ function escapeCsv(val) {
   return s.includes(';') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+// ─── Top 10 výpis ────────────────────────────────────────────────────────────
+
+function parseTimeToSeconds(t) {
+  if (!t || typeof t !== 'string') return Infinity
+  const parts = t.trim().split(':').map(Number)
+  if (parts.some(isNaN)) return Infinity
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  return Infinity
+}
+
+function printTop10(results) {
+  if (results.length === 0) return
+
+  const years = [...new Set(results.map(r => r.year))].sort()
+  const yearLabel = years.length === 1 ? `${years[0]}` : `${years[0]}–${years[years.length - 1]}`
+
+  console.log('\n╔══════════════════════════════════════════════════════════════════╗')
+  console.log(`║   TOP 10 českých závodníků  –  ${yearLabel.padEnd(34)}║`)
+  console.log('╚══════════════════════════════════════════════════════════════════╝')
+
+  for (const type of ['FULL', '703']) {
+    const label = type === 'FULL' ? 'Ironman (plná vzdálenost)' : 'Ironman 70.3'
+    const subset = results
+      .filter(r => r.raceType === type)
+      .filter(r => r.status && !/dns|dnf|dsq/i.test(r.status))
+      .sort((a, b) => parseTimeToSeconds(a.finishTime) - parseTimeToSeconds(b.finishTime))
+
+    if (subset.length === 0) continue
+
+    console.log(`\n  ── ${label} ─────────────────────────────────────────────────`)
+    console.log(`  ${'#'.padEnd(3)} ${'Jméno'.padEnd(28)} ${'Závod'.padEnd(24)} ${'Rok'.padEnd(5)} ${'Čas'.padEnd(10)} ${'Pořadí'.padEnd(7)} ${'Kat.'}`)
+    console.log(`  ${'─'.repeat(3)} ${'─'.repeat(28)} ${'─'.repeat(24)} ${'─'.repeat(5)} ${'─'.repeat(10)} ${'─'.repeat(7)} ${'─'.repeat(12)}`)
+
+    const top = subset.slice(0, 10)
+    top.forEach((r, i) => {
+      const rank = String(i + 1).padEnd(3)
+      const name = (r.athleteName || '?').substring(0, 27).padEnd(28)
+      const race = r.raceName.replace(/^Ironman\s*/i, '').substring(0, 23).padEnd(24)
+      const yr   = String(r.year).padEnd(5)
+      const time = (r.finishTime || '?').padEnd(10)
+      const pos  = String(r.overallRank || '?').padEnd(7)
+      const cat  = r.ageGroup || ''
+      console.log(`  ${rank} ${name} ${race} ${yr} ${time} ${pos} ${cat}`)
+    })
+    console.log(`\n  Celkem finišerů z ČR: ${subset.length}`)
+  }
+
+  console.log('\n══════════════════════════════════════════════════════════════════\n')
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -490,6 +541,8 @@ async function main() {
     }
     await sleep(600)
   }
+
+  printTop10(allResults)
 
   // Per-year JSON files
   const byYear = {}
