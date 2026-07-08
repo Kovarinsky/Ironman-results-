@@ -605,7 +605,18 @@ function printRaceResults(results, raceId) {
       printAthleteTable(other)
     }
     if (yrDnf.length > 0) {
-      console.log(`\n  DNF/DNS/DSQ: ${yrDnf.map(r => `${r.athleteName || '?'} (${r.status || '?'})`).join(', ')}`)
+      console.log(`\n  DNF / DNS / DSQ (${yrDnf.length}):`)
+      for (const r of yrDnf) {
+        const gend    = r.gender === 'F' ? '♀' : r.gender === 'M' ? '♂' : '?'
+        const cat     = r.ageGroup ? ` [${r.ageGroup}]` : ''
+        const segment = r.status === 'DSQ' ? `DSQ (diskvalifikace)` : dnfSegment(r)
+        const swim    = r.swimTime ? `plav: ${r.swimTime}` : ''
+        const bike    = r.bikeTime ? `kolo: ${r.bikeTime}` : ''
+        const run     = r.runTime  ? `běh: ${r.runTime}`   : ''
+        const splits  = [swim, bike, run].filter(Boolean).join('  ')
+        console.log(`    ${gend} ${(r.athleteName || '?').padEnd(28)}${cat.padEnd(10)}  ${segment}`)
+        if (splits) console.log(`       ↳ ${splits}`)
+      }
     }
     console.log(`\n  Celkem: ${women.length + men.length + other.length} finišerů (${women.length}Ž / ${men.length}M), ${yrDnf.length} DNF/DNS`)
   }
