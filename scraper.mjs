@@ -283,6 +283,12 @@ function normalizeResult(raw, race, year) {
   const ageGroup = getField(raw, '_wtc_agegroupid_value_formatted', 'ageGroup', 'division', 'category', 'wtc_divisionname', 'wtc_agegroupname')
   const gender   = genderFromAgeGroup(ageGroup) || ''
 
+  const isDns = raw.wtc_dns === true || raw.wtc_dns_formatted === 'Yes'
+  const isDnf = raw.wtc_dnf === true || raw.wtc_dnf_formatted === 'Yes'
+  const isDsq = raw.wtc_dq  === true || raw.wtc_dq_formatted  === 'Yes'
+  const finisherYes = raw.wtc_finisher === true || raw.wtc_finisher_formatted === 'Yes'
+  const derivedStatus = isDns ? 'DNS' : isDsq ? 'DSQ' : isDnf ? 'DNF' : finisherYes ? 'Finisher' : ''
+
   return {
     year,
     raceName:     race.name,
@@ -300,7 +306,11 @@ function normalizeResult(raw, race, year) {
     t2Time:       getField(raw, 'wtc_transitiontime2formatted', 't2Time', 't2', 'wtc_t2time', 't2_time'),
     runTime:      getField(raw, 'wtc_runtimeformatted', 'runTime', 'run', 'wtc_runtime', 'run_time'),
     finishTime:   getField(raw, 'wtc_finishtimeformatted', 'wtc_finishtime_formatted', 'finishTime', 'totalTime', 'wtc_finishtime', 'wtc_overalltime'),
-    status:       getField(raw, 'wtc_finisher_formatted', 'status', 'finishStatus', 'finishType', 'wtc_resulttype') || 'Finisher',
+    swimDist:     getField(raw, 'wtc_swimdistancecompleted_formatted', 'wtc_swimdistancecompleted'),
+    bikeDist:     getField(raw, 'wtc_bikedistancecompleted_formatted', 'wtc_bikedistancecompleted'),
+    runDist:      getField(raw, 'wtc_rundistancecompleted_formatted',  'wtc_rundistancecompleted'),
+    totalDist:    getField(raw, 'wtc_totaldistancecompleted_formatted', 'wtc_totaldistancecompleted'),
+    status:       derivedStatus || getField(raw, 'wtc_finisher_formatted', 'status', 'finishStatus', 'finishType', 'wtc_resulttype') || 'Finisher',
     points:       getField(raw, 'points', 'qualPoints', 'wtc_points'),
   }
 }
@@ -459,6 +469,7 @@ function toCsv(results) {
     'Rok', 'Závod', 'Typ', 'Jméno', 'Pohlaví', 'Věková kategorie',
     'Celkové pořadí', 'Kategorijní pořadí',
     'Plavání', 'T1', 'Kolo', 'T2', 'Běh', 'Celkový čas', 'Status',
+    'Plav. dist.', 'Kolo dist.', 'Běh dist.', 'Celk. dist.',
   ].join(';')
   const rows = results.map(r => [
     r.year, escapeCsv(r.raceName), r.raceType,
@@ -466,6 +477,7 @@ function toCsv(results) {
     r.overallRank, r.divisionRank,
     r.swimTime, r.t1Time, r.bikeTime, r.t2Time, r.runTime,
     r.finishTime, r.status,
+    r.swimDist, r.bikeDist, r.runDist, r.totalDist,
   ].join(';'))
   return [header, ...rows].join('\n')
 }
@@ -601,6 +613,19 @@ function printRaceResults(results, raceId) {
 
 // ─── DNF přehled ─────────────────────────────────────────────────────────────
 
+function dnfSegment(r) {
+  // Determine where the athlete stopped based on available partial times/distances
+  const hasBike = parseTimeToSeconds(r.bikeTime) < Infinity
+  const hasRun  = parseTimeToSeconds(r.runTime)  < Infinity
+  const hasSwim = parseTimeToSeconds(r.swimTime) < Infinity
+
+  if (r.status === 'DNS') return 'DNS (neodjel/a)'
+  if (hasRun)  return `DNF – běh${r.runDist  ? ' ' + r.runDist  : ''}${r.runTime  ? ' (' + r.runTime  + ')' : ''}`
+  if (hasBike) return `DNF – kolo${r.bikeDist ? ' ' + r.bikeDist : ''}${r.bikeTime ? ' (' + r.bikeTime + ')' : ''}`
+  if (hasSwim) return `DNF – plavání${r.swimDist ? ' ' + r.swimDist : ''}${r.swimTime ? ' (' + r.swimTime + ')' : ''}`
+  return r.status || 'DNF'
+}
+
 function printDnfSummary(results) {
   const isFinisher = r =>
     (!r.status || !/dns|dnf|dsq/i.test(r.status)) &&
@@ -631,10 +656,15 @@ function printDnfSummary(results) {
       const athletes = byYear[yr]
       console.log(`    ${yr}  (${athletes.length}×):`)
       for (const r of athletes) {
-        const gend = r.gender === 'F' ? '♀' : r.gender === 'M' ? '♂' : '?'
-        const cat  = r.ageGroup ? ` [${r.ageGroup}]` : ''
-        const st   = r.status || 'DNF'
-        console.log(`      ${gend} ${r.athleteName || '?'}${cat}  – ${st}`)
+        const gend    = r.gender === 'F' ? '♀' : r.gender === 'M' ? '♂' : '?'
+        const cat     = r.ageGroup ? ` [${r.ageGroup}]` : ''
+        const segment = dnfSegment(r)
+        const swim    = r.swimTime ? `plav: ${r.swimTime}` : ''
+        const bike    = r.bikeTime ? `kolo: ${r.bikeTime}` : ''
+        const run     = r.runTime  ? `běh: ${r.runTime}`   : ''
+        const splits  = [swim, bike, run].filter(Boolean).join('  ')
+        console.log(`      ${gend} ${(r.athleteName || '?').padEnd(28)}${cat.padEnd(10)}  ${segment}`)
+        if (splits) console.log(`         ↳ ${splits}`)
       }
     }
   }
